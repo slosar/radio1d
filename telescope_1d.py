@@ -260,9 +260,9 @@ class Telescope1D:
                         uvplane[ii,jj] = val
         return uvplane
 
-    def get_time_errors(self, time_error_sigma=10e-12, correlated=True, seed=0, r0=None):
+    def get_errors(self, error_sigma=10e-12, correlated=True, seed=0, r0=None):
         '''
-        Get array of time errors for each dish.
+        Get array of time/amplitude errors for each dish.
         Make argument correlated True for correlated time errors (errors of
         neighboring dishes are more similar than errors of far away dish pairs).
         Make argument r0 bigger to make more correlated.
@@ -275,17 +275,17 @@ class Telescope1D:
             for i in range(self.Ndishes):
                 for j in range(self.Ndishes):
                     if i==j:
-                        cov[i,j] = time_error_sigma**2
+                        cov[i,j] = error_sigma**2
                     else:
                         baseline_distance = np.abs(self.dish_locations[j]-self.dish_locations[i]).astype(float)
-                        cov[i,j] = time_error_sigma**2/np.sqrt(baseline_distance/r0)
+                        cov[i,j] = error_sigma**2/np.sqrt(baseline_distance/r0)
             mean = np.zeros(self.Ndishes)
-            time_errors = np.random.multivariate_normal(mean,cov)
+            errors = np.random.multivariate_normal(mean,cov)
         else:
-            time_errors = np.random.normal(0,time_error_sigma,self.Ndishes)
-        return time_errors
+            errors = np.random.normal(0, error_sigma,self.Ndishes)
+        return errors
 
-    def get_obs_uvplane(self, uvplane, time_error_sigma=10e-12, correlated=True, seed=0, filter_FG=True):
+    def get_obs_uvplane(self, uvplane, error_sigma=10e-12, correlated=True, time_error = True, seed=0, filter_FG=True):
         '''
         Get the uvplane with time error. Argument correlated refers to whether
         or not the errors are correlated among dishes.
@@ -293,13 +293,16 @@ class Telescope1D:
         uvplane with the errors.
         If filter_FG is True, we filter out the foregrounds after adding the
         timing errors, both the version with single baseline filtering and combined and return all three:
+        If error is not time_err, it is amplitude error.
+
         '''
-        # Add time errors
-        if time_error_sigma > 0:
-            time_errors = self.get_time_errors(time_error_sigma=time_error_sigma, correlated=correlated, seed=seed)
+        # Add time/ampltiude errors
+        if error_sigma > 0:
+            errors = self.get_errors(error_sigma=error_sigma, correlated=correlated, seed=seed)
             uvplane_obs = np.zeros_like(uvplane, np.complex)
             for i, f in enumerate(self.freqs):
-                phase_errors = time_errors*f*1e6*2*np.pi
+                if time_error:
+                    phase_errors = errors*f*1e6*2*np.pi
                 # Loop through each unique baseline length
                 # Get and average all the observed visibilities for each
                 for j, baseline_len in enumerate(self.unique_baseline_lengths):
@@ -309,7 +312,10 @@ class Telescope1D:
                         dish1_loc, dish2_loc = list(combinations(self.dish_locations,2))[k]
                         dish1_idx = np.where(self.dish_locations==dish1_loc)[0][0]
                         dish2_idx = np.where(self.dish_locations==dish2_loc)[0][0]
-                        uvplane_j.append((np.exp(1j*(phase_errors[dish2_idx]-phase_errors[dish1_idx])))*uvplane[i,j])
+                        if time_error:
+                            uvplane_j.append((np.exp(1j*(phase_errors[dish2_idx]-phase_errors[dish1_idx])))*uvplane[i,j])
+                        else:
+                            uvplane_j.append((1+errors[dish1_idx])*(1+errors[dish2_idx])*uvplane[i,j])
                     uvplane_j = np.array(uvplane_j, np.complex)
                     uvplane_obs[i,j] = np.mean(uvplane_j, axis=0)
         else:

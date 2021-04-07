@@ -14,9 +14,9 @@ for fname in flist:
     redstr = fname[2]
     redundant = (redstr == 'red')
     sigt = fname[4]
-    te = float(fname[5])
-    if te == 0.0:
-        te = int(te)
+    te = fname[5]
+    #if te == 0.0:
+    #    te = int(te)
     newglobname = f"out/{ndishes}_{npix}_{redstr}_*_{sigt}_{te}.npy"
     outname = f"outp/{ndishes}_{npix}_{redstr}_{sigt}_{te}"
     sublist = glob.glob(newglobname)
